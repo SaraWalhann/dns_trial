@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DNSXplore Research Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy:       #002147;
+    --blue:       #005BAC;
+    --cyan:       #00A3E0;
+    --green:      #00875A;
+    --amber:      #F59E0B;
+    --red:        #DC2626;
+    --bg:         #F0F4F8;
+    --surface:    #FFFFFF;
+    --border:     #CBD5E1;
+    --text:       #0F172A;
+    --muted:      #64748B;
+    --mono:       'IBM Plex Mono', monospace;
+    --sans:       'IBM Plex Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ─────────────────────────────────────── */
+  header {
+    background: var(--navy);
+    color: #fff;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      90deg,
+      rgba(255,255,255,.03) 0px, rgba(255,255,255,.03) 1px,
+      transparent 1px, transparent 60px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255,255,255,.03) 0px, rgba(255,255,255,.03) 1px,
+      transparent 1px, transparent 60px
+    );
+    pointer-events: none;
+  }
+  .header-inner {
+    position: relative;
+    z-index: 1;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 2rem 2rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+  }
+  .brand { display: flex; align-items: center; gap: 1.2rem; }
+  .brand-mark {
+    background: var(--cyan);
+    color: var(--navy);
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 1rem;
+    letter-spacing: 1px;
+    padding: .6rem 1rem;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .brand-text h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -.3px;
+  }
+  .brand-text p { font-size: .85rem; opacity: .7; margin-top: .2rem; }
+
+  .header-kpis {
+    display: flex;
+    gap: .75rem;
+    flex-wrap: wrap;
+  }
+  .kpi {
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 6px;
+    padding: .6rem 1rem;
+    text-align: center;
+    min-width: 90px;
+  }
+  .kpi-val {
+    font-family: var(--mono);
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--cyan);
+    display: block;
+    line-height: 1;
+  }
+  .kpi-lbl { font-size: .7rem; opacity: .65; margin-top: .3rem; text-transform: uppercase; letter-spacing: .5px; }
+
+  /* ── NAV TABS ────────────────────────────────────── */
+  nav {
+    background: var(--navy);
+    border-top: 1px solid rgba(255,255,255,.1);
+  }
+  .tabs {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+  }
+  .tab {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,.55);
+    font-family: var(--sans);
+    font-size: .85rem;
+    font-weight: 600;
+    padding: .9rem 1.4rem;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all .2s;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .tab:hover { color: #fff; }
+  .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+  /* ── MAIN ────────────────────────────────────────── */
+  main {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── GRID ────────────────────────────────────────── */
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; }
+  .span-2 { grid-column: span 2; }
+  .span-3 { grid-column: span 3; }
+  .span-4 { grid-column: span 4; }
+
+  @media (max-width: 900px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .span-2, .span-3, .span-4 { grid-column: span 1; }
+  }
+
+  /* ── CARD ────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    animation: fadeUp .4s ease both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .card-title {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: .4rem;
+  }
+  .card-value {
+    font-family: var(--mono);
+    font-size: 2.2rem;
+    font-weight: 600;
+    color: var(--navy);
+    line-height: 1;
+  }
+  .card-sub {
+    font-size: .8rem;
+    color: var(--muted);
+    margin-top: .4rem;
+  }
+
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    animation: fadeUp .4s ease both;
+  }
+  .chart-card-header { margin-bottom: 1.25rem; }
+  .chart-card-header h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .chart-card-header p {
+    font-size: .8rem;
+    color: var(--muted);
+    margin-top: .25rem;
+    font-style: italic;
+  }
+  .chart-wrap { position: relative; width: 100%; }
+  .chart-wrap canvas { display: block; width: 100% !important; }
+
+  /* ── BADGE ───────────────────────────────────────── */
+  .badge {
+    display: inline-block;
+    padding: .2rem .6rem;
+    border-radius: 20px;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .3px;
+  }
+  .badge-success { background: #DCFCE7; color: #166534; }
+  .badge-error   { background: #FEE2E2; color: #991B1B; }
+  .badge-warn    { background: #FEF3C7; color: #92400E; }
+  .badge-info    { background: #DBEAFE; color: #1E40AF; }
+
+  /* ── TABLE ───────────────────────────────────────── */
+  .data-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  .data-table th {
+    text-align: left;
+    padding: .65rem .9rem;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--muted);
+    background: #F8FAFC;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: .65rem .9rem;
+    border-bottom: 1px solid #F1F5F9;
+    color: var(--text);
+    vertical-align: middle;
+  }
+  .data-table tbody tr:hover { background: #F8FAFC; }
+  .mono { font-family: var(--mono); font-size: .8rem; }
+
+  /* ── SECTION LABEL ───────────────────────────────── */
+  .section-label {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--blue);
+    margin-bottom: 1rem;
+    padding-bottom: .5rem;
+    border-bottom: 2px solid var(--border);
+  }
+
+  /* ── PROGRESS BAR ────────────────────────────────── */
+  .progress-row { display: flex; align-items: center; gap: .75rem; margin-bottom: .6rem; }
+  .progress-label { font-size: .8rem; font-weight: 600; min-width: 80px; color: var(--navy); }
+  .progress-track { flex: 1; height: 8px; background: #E2E8F0; border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+  .progress-count { font-family: var(--mono); font-size: .75rem; color: var(--muted); min-width: 28px; text-align: right; }
+
+  /* ── RCODE PILL ROW ──────────────────────────────── */
+  .rcode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: .75rem; }
+  .rcode-item {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+  }
+  .rcode-name { font-family: var(--mono); font-size: .85rem; font-weight: 600; margin-bottom: .4rem; }
+  .rcode-count { font-size: 1.8rem; font-weight: 700; font-family: var(--mono); }
+  .rcode-pct { font-size: .75rem; color: var(--muted); margin-top: .2rem; }
+
+  /* ── FOOTER ──────────────────────────────────────── */
+  footer {
+    background: var(--navy);
+    color: rgba(255,255,255,.5);
+    text-align: center;
+    font-size: .78rem;
+    padding: 1.2rem 2rem;
+    margin-top: 3rem;
+    font-family: var(--mono);
+  }
+  footer a { color: var(--cyan); text-decoration: none; }
+  footer span { margin: 0 .5rem; opacity: .4; }
+
+  /* ── TOOLTIP ─────────────────────────────────────── */
+  .info-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .7rem;
+    background: #EFF6FF;
+    color: var(--blue);
+    border: 1px solid #BFDBFE;
+    border-radius: 3px;
+    padding: .1rem .4rem;
+    margin-left: .4rem;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════════════ -->
+<header>
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-mark">DNS/XPLORE</div>
+      <div class="brand-text">
+        <h1>Research Dashboard</h1>
+        <p>IANA Resource Record Analytics &amp; RFC Compliance Monitoring</p>
+      </div>
+    </div>
+    <div class="header-kpis">
+      <div class="kpi"><span class="kpi-val" id="kpi-total">—</span><div class="kpi-lbl">Queries</div></div>
+      <div class="kpi"><span class="kpi-val" id="kpi-success">—</span><div class="kpi-lbl">Success</div></div>
+      <div class="kpi"><span class="kpi-val" id="kpi-latency">—</span><div class="kpi-lbl">Avg ms</div></div>
+      <div class="kpi"><span class="kpi-val" id="kpi-rfcs">—</span><div class="kpi-lbl">RFCs</div></div>
+      <div class="kpi"><span class="kpi-val" id="kpi-types">—</span><div class="kpi-lbl">RR Types</div></div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════
+     TABS
+════════════════════════════════════════════════════ -->
+<nav>
+  <div class="tabs">
+    <button class="tab active" onclick="showPanel('overview',this)">Overview</button>
+    <button class="tab" onclick="showPanel('performance',this)">Performance</button>
+    <button class="tab" onclick="showPanel('compliance',this)">RFC Compliance</button>
+    <button class="tab" onclick="showPanel('dnssec',this)">DNSSEC</button>
+    <button class="tab" onclick="showPanel('raw',this)">Raw Data</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════
+     MAIN
+════════════════════════════════════════════════════ -->
+<main>
+
+  <!-- ── OVERVIEW ────────────────────────────────── -->
+  <div class="panel active" id="panel-overview">
+    <div class="grid-4" style="margin-bottom:1.25rem">
+      <div class="card">
+        <div class="card-title">Total Queries</div>
+        <div class="card-value" id="ov-total">—</div>
+        <div class="card-sub">Research log entries</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Success Rate</div>
+        <div class="card-value" id="ov-sr">—</div>
+        <div class="card-sub">NOERROR responses</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Avg Latency</div>
+        <div class="card-value" id="ov-lat">—</div>
+        <div class="card-sub">Across all record types</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Error Queries</div>
+        <div class="card-value" id="ov-err">—</div>
+        <div class="card-sub">SERVFAIL / NXDOMAIN / TIMEOUT</div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:1.25rem">
+      <!-- RFC Pie -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3>RFC Standard Distribution</h3>
+          <p>Query share across IETF specifications</p>
+        </div>
+        <div class="chart-wrap" style="height:300px">
+          <canvas id="chart-rfc-pie"></canvas>
+        </div>
+      </div>
+      <!-- RCODE Doughnut -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3>RCODE Response Breakdown</h3>
+          <p>DNS response code distribution — ICANN stability metric</p>
+        </div>
+        <div class="chart-wrap" style="height:300px">
+          <canvas id="chart-rcode-donut"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Time Series -->
+    <div class="chart-card" style="margin-bottom:1.25rem">
+      <div class="chart-card-header">
+        <h3>Query Volume &amp; Latency Over Time</h3>
+        <p>Hourly query count (bars) and average latency (line) throughout the research window</p>
+      </div>
+      <div class="chart-wrap" style="height:240px">
+        <canvas id="chart-timeseries"></canvas>
+      </div>
+    </div>
+
+    <!-- RCODE pill summary -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <h3>RCODE Quick Summary</h3>
+        <p>Absolute counts per DNS response code</p>
+      </div>
+      <div class="rcode-grid" id="rcode-pills"></div>
+    </div>
+  </div>
+
+  <!-- ── PERFORMANCE ──────────────────────────────── -->
+  <div class="panel" id="panel-performance">
+    <!-- Latency horizontal bar -->
+    <div class="chart-card" style="margin-bottom:1.25rem">
+      <div class="chart-card-header">
+        <h3>Avg Latency by IANA Record Type</h3>
+        <p>Average response time per Resource Record Type — green ≤ 80ms, amber ≤ 120ms, red &gt; 120ms</p>
+      </div>
+      <div class="chart-wrap" style="height:380px">
+        <canvas id="chart-latency-bar"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:1.25rem">
+      <!-- Resolver comparison -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3>Resolver Comparison</h3>
+          <p>Avg latency and error rate — 8.8.8.8 vs 1.1.1.1</p>
+        </div>
+        <div class="chart-wrap" style="height:260px">
+          <canvas id="chart-resolver"></canvas>
+        </div>
+      </div>
+      <!-- Query count per type radar -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3>Record Type Query Volume</h3>
+          <p>Polar area chart — relative testing depth per RR type</p>
+        </div>
+        <div class="chart-wrap" style="height:260px">
+          <canvas id="chart-polar"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success vs Error stacked -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <h3>Success vs Error by Record Type</h3>
+        <p>Stacked bar — identifies which record types produce the most failures</p>
+      </div>
+      <div class="chart-wrap" style="height:280px">
+        <canvas id="chart-stacked"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RFC COMPLIANCE ───────────────────────────── -->
+  <div class="panel" id="panel-compliance">
+    <div class="grid-2" style="margin-bottom:1.25rem">
+      <!-- RFC bar chart -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3>Queries per RFC Standard</h3>
+          <p>Number of queries mapped to each governing specification</p>
+        </div>
+        <div class="chart-wrap" style="height:300px">
+          <canvas id="chart-rfc-bar"></canvas>
+        </div>
+      </div>
+      <!-- RFC progress bars -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3>RFC Coverage (% of total)</h3>
+          <p>Share of the research dataset each RFC accounts for</p>
+        </div>
+        <div id="rfc-progress"></div>
+      </div>
+    </div>
+
+    <!-- IANA registry table -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <h3>IANA Resource Record Registry — Tested Types</h3>
+        <p>All record types observed in this dataset, cross-referenced with the IANA DNS Parameters registry</p>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="iana-table"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DNSSEC ────────────────────────────────────── -->
+  <div class="panel" id="panel-dnssec">
+    <div class="grid-2" style="margin-bottom:1.25rem">
+      <!-- DNSSEC bar -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3>DNSSEC Record Type Performance</h3>
+          <p>Query count and avg latency for RFC 4034 / RFC 5155 security extensions</p>
+        </div>
+        <div class="chart-wrap" style="height:280px">
+          <canvas id="chart-dnssec"></canvas>
+        </div>
+      </div>
+      <!-- Non-DNSSEC vs DNSSEC latency -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3>Cryptographic Overhead</h3>
+          <p>Latency comparison between DNSSEC-signed and standard queries</p>
+        </div>
+        <div class="chart-wrap" style="height:280px">
+          <canvas id="chart-crypto"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- DNSSEC detail table -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <h3>DNSSEC Type Details</h3>
+        <p>Breakdown of all security extension record types with IANA IDs and RFC references</p>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="dnssec-table"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RAW DATA ──────────────────────────────────── -->
+  <div class="panel" id="panel-raw">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <h3>Full Research Dataset</h3>
+        <p>All 75 DNS query records — IANA IDs &amp; RFC references included</p>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="raw-table"></table>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <a href="https://www.iana.org/assignments/dns-parameters/" target="_blank">IANA DNS Parameters</a>
+  <span>|</span>
+  <a href="https://www.rfc-editor.org/" target="_blank">RFC Editor</a>
+  <span>|</span>
+  <a href="https://www.icann.org/" target="_blank">ICANN</a>
+  <span>|</span>
+  DNSXplore Research Dashboard — CSV-driven, no backend required
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// DATA — embedded from dns_research.csv
+// ═══════════════════════════════════════════════════════════════
+const RAW = [
+  {ts:"2026-02-16 08:00",type:"A",     id:1,  rfc:"RFC 1035",lat:42, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"example.com"},
+  {ts:"2026-02-16 08:05",type:"AAAA",  id:28, rfc:"RFC 3596",lat:55, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"example.com"},
+  {ts:"2026-02-16 08:10",type:"MX",    id:15, rfc:"RFC 1035",lat:89, rcode:"SERVFAIL",status:"Error",  res:"1.1.1.1",  domain:"mail.example.com"},
+  {ts:"2026-02-16 08:15",type:"CNAME", id:5,  rfc:"RFC 1035",lat:38, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"www.example.com"},
+  {ts:"2026-02-16 08:20",type:"TXT",   id:16, rfc:"RFC 1035",lat:110,rcode:"NXDOMAIN",status:"Error",  res:"1.1.1.1",  domain:"invalid.example.com"},
+  {ts:"2026-02-16 08:25",type:"OPT",   id:41, rfc:"RFC 6891",lat:45, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"example.com"},
+  {ts:"2026-02-16 08:30",type:"SRV",   id:33, rfc:"RFC 2782",lat:72, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"_service.example.com"},
+  {ts:"2026-02-16 08:35",type:"NS",    id:2,  rfc:"RFC 1035",lat:51, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"example.com"},
+  {ts:"2026-02-16 08:40",type:"PTR",   id:12, rfc:"RFC 1035",lat:63, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"1.0.0.127.in-addr.arpa"},
+  {ts:"2026-02-16 08:45",type:"SOA",   id:6,  rfc:"RFC 1035",lat:78, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"example.com"},
+  {ts:"2026-02-16 08:50",type:"A",     id:1,  rfc:"RFC 1035",lat:35, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"google.com"},
+  {ts:"2026-02-16 08:55",type:"AAAA",  id:28, rfc:"RFC 3596",lat:48, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"google.com"},
+  {ts:"2026-02-16 09:00",type:"DNSKEY",id:48, rfc:"RFC 4034",lat:125,rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"dnssec-example.com"},
+  {ts:"2026-02-16 09:05",type:"DS",    id:43, rfc:"RFC 4034",lat:98, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"dnssec-example.com"},
+  {ts:"2026-02-16 09:10",type:"RRSIG", id:46, rfc:"RFC 4034",lat:134,rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"dnssec-example.com"},
+  {ts:"2026-02-16 09:15",type:"NSEC",  id:47, rfc:"RFC 4034",lat:87, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"dnssec-example.com"},
+  {ts:"2026-02-16 09:20",type:"NSEC3", id:50, rfc:"RFC 5155",lat:102,rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"dnssec-example.com"},
+  {ts:"2026-02-16 09:25",type:"CAA",   id:257,rfc:"RFC 8659",lat:76, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"example.com"},
+  {ts:"2026-02-16 09:30",type:"TLSA",  id:52, rfc:"RFC 6698",lat:91, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"_443._tcp.example.com"},
+  {ts:"2026-02-16 09:35",type:"A",     id:1,  rfc:"RFC 1035",lat:150,rcode:"TIMEOUT", status:"Error",  res:"8.8.8.8",  domain:"slow.example.com"},
+  {ts:"2026-02-16 09:40",type:"MX",    id:15, rfc:"RFC 1035",lat:44, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"example.org"},
+  {ts:"2026-02-16 09:45",type:"TXT",   id:16, rfc:"RFC 1035",lat:58, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"spf.example.com"},
+  {ts:"2026-02-16 09:50",type:"CNAME", id:5,  rfc:"RFC 1035",lat:31, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"alias.example.com"},
+  {ts:"2026-02-16 09:55",type:"A",     id:1,  rfc:"RFC 1035",lat:67, rcode:"NXDOMAIN",status:"Error",  res:"1.1.1.1",  domain:"nonexistent.example.com"},
+  {ts:"2026-02-16 10:00",type:"AAAA",  id:28, rfc:"RFC 3596",lat:52, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"ipv6.example.com"},
+  {ts:"2026-02-16 10:05",type:"NS",    id:2,  rfc:"RFC 1035",lat:48, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"example.net"},
+  {ts:"2026-02-16 10:10",type:"PTR",   id:12, rfc:"RFC 1035",lat:71, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"8.8.8.8.in-addr.arpa"},
+  {ts:"2026-02-16 10:15",type:"SOA",   id:6,  rfc:"RFC 1035",lat:82, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"example.net"},
+  {ts:"2026-02-16 10:20",type:"SRV",   id:33, rfc:"RFC 2782",lat:95, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"_ldap._tcp.example.com"},
+  {ts:"2026-02-16 10:25",type:"A",     id:1,  rfc:"RFC 1035",lat:39, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"cloudflare.com"},
+  {ts:"2026-02-16 10:30",type:"AAAA",  id:28, rfc:"RFC 3596",lat:61, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"cloudflare.com"},
+  {ts:"2026-02-16 10:35",type:"MX",    id:15, rfc:"RFC 1035",lat:73, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"protonmail.com"},
+  {ts:"2026-02-16 10:40",type:"TXT",   id:16, rfc:"RFC 1035",lat:88, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"dkim.example.com"},
+  {ts:"2026-02-16 10:45",type:"DNSKEY",id:48, rfc:"RFC 4034",lat:118,rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"icann.org"},
+  {ts:"2026-02-16 10:50",type:"DS",    id:43, rfc:"RFC 4034",lat:105,rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"icann.org"},
+  {ts:"2026-02-16 10:55",type:"CAA",   id:257,rfc:"RFC 8659",lat:69, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"letsencrypt.org"},
+  {ts:"2026-02-16 11:00",type:"A",     id:1,  rfc:"RFC 1035",lat:145,rcode:"SERVFAIL",status:"Error",  res:"1.1.1.1",  domain:"broken.example.com"},
+  {ts:"2026-02-16 11:05",type:"AAAA",  id:28, rfc:"RFC 3596",lat:56, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"github.com"},
+  {ts:"2026-02-16 11:10",type:"CNAME", id:5,  rfc:"RFC 1035",lat:34, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"www.github.com"},
+  {ts:"2026-02-16 11:15",type:"MX",    id:15, rfc:"RFC 1035",lat:77, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"microsoft.com"},
+  {ts:"2026-02-16 11:20",type:"TXT",   id:16, rfc:"RFC 1035",lat:94, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"_dmarc.example.com"},
+  {ts:"2026-02-16 11:25",type:"NS",    id:2,  rfc:"RFC 1035",lat:54, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"iana.org"},
+  {ts:"2026-02-16 11:30",type:"SOA",   id:6,  rfc:"RFC 1035",lat:81, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"iana.org"},
+  {ts:"2026-02-16 11:35",type:"A",     id:1,  rfc:"RFC 1035",lat:41, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"rfc-editor.org"},
+  {ts:"2026-02-16 11:40",type:"AAAA",  id:28, rfc:"RFC 3596",lat:59, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"rfc-editor.org"},
+  {ts:"2026-02-16 11:45",type:"TLSA",  id:52, rfc:"RFC 6698",lat:97, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"_443._tcp.mail.example.com"},
+  {ts:"2026-02-16 11:50",type:"SRV",   id:33, rfc:"RFC 2782",lat:68, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"_xmpp._tcp.example.com"},
+  {ts:"2026-02-16 11:55",type:"RRSIG", id:46, rfc:"RFC 4034",lat:128,rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"secure.example.com"},
+  {ts:"2026-02-16 12:00",type:"NSEC3", id:50, rfc:"RFC 5155",lat:112,rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"secure.example.com"},
+  {ts:"2026-02-16 12:05",type:"A",     id:1,  rfc:"RFC 1035",lat:36, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"amazon.com"},
+  {ts:"2026-02-16 12:10",type:"AAAA",  id:28, rfc:"RFC 3596",lat:49, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"amazon.com"},
+  {ts:"2026-02-16 12:15",type:"MX",    id:15, rfc:"RFC 1035",lat:84, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"gmail.com"},
+  {ts:"2026-02-16 12:20",type:"TXT",   id:16, rfc:"RFC 1035",lat:101,rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"verification.example.com"},
+  {ts:"2026-02-16 12:25",type:"CNAME", id:5,  rfc:"RFC 1035",lat:29, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"cdn.example.com"},
+  {ts:"2026-02-16 12:30",type:"A",     id:1,  rfc:"RFC 1035",lat:155,rcode:"TIMEOUT", status:"Error",  res:"1.1.1.1",  domain:"timeout.example.com"},
+  {ts:"2026-02-16 12:35",type:"NS",    id:2,  rfc:"RFC 1035",lat:46, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"dns.example.com"},
+  {ts:"2026-02-16 12:40",type:"PTR",   id:12, rfc:"RFC 1035",lat:65, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"1.1.1.1.in-addr.arpa"},
+  {ts:"2026-02-16 12:45",type:"SOA",   id:6,  rfc:"RFC 1035",lat:79, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"root-servers.net"},
+  {ts:"2026-02-16 12:50",type:"DNSKEY",id:48, rfc:"RFC 4034",lat:121,rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"root-servers.net"},
+  {ts:"2026-02-16 12:55",type:"A",     id:1,  rfc:"RFC 1035",lat:43, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"wikipedia.org"},
+  {ts:"2026-02-16 13:00",type:"AAAA",  id:28, rfc:"RFC 3596",lat:57, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"wikipedia.org"},
+  {ts:"2026-02-16 13:05",type:"CAA",   id:257,rfc:"RFC 8659",lat:74, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"security.example.com"},
+  {ts:"2026-02-16 13:10",type:"MX",    id:15, rfc:"RFC 1035",lat:86, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"outlook.com"},
+  {ts:"2026-02-16 13:15",type:"TXT",   id:16, rfc:"RFC 1035",lat:99, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"policy.example.com"},
+  {ts:"2026-02-16 13:20",type:"SRV",   id:33, rfc:"RFC 2782",lat:70, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"_sip._tcp.example.com"},
+  {ts:"2026-02-16 13:25",type:"A",     id:1,  rfc:"RFC 1035",lat:38, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"reddit.com"},
+  {ts:"2026-02-16 13:30",type:"AAAA",  id:28, rfc:"RFC 3596",lat:53, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"reddit.com"},
+  {ts:"2026-02-16 13:35",type:"CNAME", id:5,  rfc:"RFC 1035",lat:32, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"www.reddit.com"},
+  {ts:"2026-02-16 13:40",type:"NS",    id:2,  rfc:"RFC 1035",lat:50, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"reddit.com"},
+  {ts:"2026-02-16 13:45",type:"A",     id:1,  rfc:"RFC 1035",lat:140,rcode:"NXDOMAIN",status:"Error",  res:"8.8.8.8",  domain:"fake.domain.invalid"},
+  {ts:"2026-02-16 13:50",type:"MX",    id:15, rfc:"RFC 1035",lat:75, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"yahoo.com"},
+  {ts:"2026-02-16 13:55",type:"TXT",   id:16, rfc:"RFC 1035",lat:92, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"domainkey.example.com"},
+  {ts:"2026-02-16 14:00",type:"TLSA",  id:52, rfc:"RFC 6698",lat:89, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"_25._tcp.mail.example.com"},
+  {ts:"2026-02-16 14:05",type:"A",     id:1,  rfc:"RFC 1035",lat:40, rcode:"NOERROR", status:"Success",res:"8.8.8.8",  domain:"netflix.com"},
+  {ts:"2026-02-16 14:10",type:"AAAA",  id:28, rfc:"RFC 3596",lat:60, rcode:"NOERROR", status:"Success",res:"1.1.1.1",  domain:"netflix.com"}
+];
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+const PALETTE = ['#005BAC','#00A3E0','#00875A','#F59E0B','#DC2626','#8B5CF6','#059669','#D97706','#7C3AED','#0891B2'];
+
+function groupBy(arr, key) {
+  return arr.reduce((acc, item) => {
+    const k = item[key];
+    acc[k] = acc[k] || [];
+    acc[k].push(item);
+    return acc;
+  }, {});
+}
+function avg(arr) { return arr.reduce((s,v)=>s+v,0)/arr.length; }
+function pct(n,total) { return ((n/total)*100).toFixed(1)+'%'; }
+
+const DNSSEC_TYPES = new Set(['DNSKEY','DS','RRSIG','NSEC','NSEC3']);
+
+// ═══════════════════════════════════════════════════════════════
+// COMPUTE SUMMARY STATS
+// ═══════════════════════════════════════════════════════════════
+const total   = RAW.length;
+const success = RAW.filter(r=>r.status==='Success').length;
+const errors  = total - success;
+const avgLat  = avg(RAW.map(r=>r.lat)).toFixed(1);
+const rfcs    = [...new Set(RAW.map(r=>r.rfc))].length;
+const types   = [...new Set(RAW.map(r=>r.type))].length;
+
+// Populate KPIs in header
+document.getElementById('kpi-total').textContent   = total;
+document.getElementById('kpi-success').textContent = pct(success,total);
+document.getElementById('kpi-latency').textContent = avgLat;
+document.getElementById('kpi-rfcs').textContent    = rfcs;
+document.getElementById('kpi-types').textContent   = types;
+
+// Populate overview cards
+document.getElementById('ov-total').textContent = total;
+document.getElementById('ov-sr').textContent    = pct(success,total);
+document.getElementById('ov-lat').textContent   = avgLat+'ms';
+document.getElementById('ov-err').textContent   = errors;
+
+// ═══════════════════════════════════════════════════════════════
+// CHART DEFAULTS
+// ═══════════════════════════════════════════════════════════════
+Chart.defaults.font.family = "'IBM Plex Sans', sans-serif";
+Chart.defaults.font.size   = 12;
+Chart.defaults.color       = '#64748B';
+Chart.defaults.plugins.legend.position = 'bottom';
+
+function mkChart(id, cfg) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  return new Chart(ctx, cfg);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 1. RFC PIE
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const grp = groupBy(RAW,'rfc');
+  const labels = Object.keys(grp);
+  const data   = labels.map(k=>grp[k].length);
+  mkChart('chart-rfc-pie',{
+    type:'pie',
+    data:{
+      labels,
+      datasets:[{data,backgroundColor:PALETTE.slice(0,labels.length),borderWidth:2,borderColor:'#fff'}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'right',labels:{padding:14,font:{size:11}}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.parsed} queries (${pct(ctx.parsed,total)})`}}
+      }
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 2. RCODE DOUGHNUT
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const grp = groupBy(RAW,'rcode');
+  const labels = Object.keys(grp);
+  const data   = labels.map(k=>grp[k].length);
+  const colors = {NOERROR:'#00875A',SERVFAIL:'#DC2626',NXDOMAIN:'#F59E0B',TIMEOUT:'#8B5CF6'};
+  mkChart('chart-rcode-donut',{
+    type:'doughnut',
+    data:{
+      labels,
+      datasets:[{data,backgroundColor:labels.map(l=>colors[l]||'#94A3B8'),borderWidth:2,borderColor:'#fff'}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,cutout:'65%',
+      plugins:{
+        legend:{position:'right',labels:{padding:14,font:{size:11}}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.parsed} (${pct(ctx.parsed,total)})`}}
+      }
+    }
+  });
+
+  // RCODE pills
+  const pilldiv = document.getElementById('rcode-pills');
+  const rcolors2 = {NOERROR:{bg:'#DCFCE7',col:'#166534'},SERVFAIL:{bg:'#FEE2E2',col:'#991B1B'},NXDOMAIN:{bg:'#FEF3C7',col:'#92400E'},TIMEOUT:{bg:'#EDE9FE',col:'#5B21B6'}};
+  labels.forEach(l=>{
+    const c = rcolors2[l]||{bg:'#F1F5F9',col:'#334155'};
+    pilldiv.innerHTML += `
+      <div class="rcode-item" style="border-color:${c.bg};background:${c.bg}10">
+        <div class="rcode-name" style="color:${c.col}">${l}</div>
+        <div class="rcode-count" style="color:${c.col}">${grp[l].length}</div>
+        <div class="rcode-pct">${pct(grp[l].length,total)} of total</div>
+      </div>`;
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 3. TIME SERIES
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const hourGroups = {};
+  RAW.forEach(r=>{
+    const h = r.ts.substring(11,16);
+    hourGroups[h] = hourGroups[h] || [];
+    hourGroups[h].push(r);
+  });
+  const hours   = Object.keys(hourGroups).sort();
+  const counts  = hours.map(h=>hourGroups[h].length);
+  const latAvgs = hours.map(h=>+avg(hourGroups[h].map(r=>r.lat)).toFixed(1));
+
+  mkChart('chart-timeseries',{
+    type:'bar',
+    data:{
+      labels:hours,
+      datasets:[
+        {type:'bar', label:'Query Count', data:counts, backgroundColor:'rgba(0,91,172,0.2)',borderColor:'#005BAC',borderWidth:1.5,yAxisID:'y'},
+        {type:'line',label:'Avg Latency (ms)',data:latAvgs,borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,0.1)',borderWidth:2,tension:.4,pointRadius:3,yAxisID:'y2'}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      scales:{
+        y:{title:{display:true,text:'Queries'},grid:{color:'#F1F5F9'},beginAtZero:true},
+        y2:{position:'right',title:{display:true,text:'ms'},grid:{display:false}}
+      },
+      plugins:{legend:{position:'top'}}
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 4. LATENCY HORIZONTAL BAR
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const grp = groupBy(RAW,'type');
+  const sorted = Object.entries(grp)
+    .map(([t,arr])=>({t,avg:+avg(arr.map(r=>r.lat)).toFixed(1), id:arr[0].id}))
+    .sort((a,b)=>b.avg-a.avg);
+
+  const labels = sorted.map(s=>`${s.t} (ID ${s.id})`);
+  const data   = sorted.map(s=>s.avg);
+  const bgColors = data.map(v=> v>120?'rgba(220,38,38,.7)': v>80?'rgba(245,158,11,.7)':'rgba(0,135,90,.7)');
+
+  mkChart('chart-latency-bar',{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[{label:'Avg Latency (ms)',data,backgroundColor:bgColors,borderRadius:4}]
+    },
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      scales:{
+        x:{title:{display:true,text:'Milliseconds'},grid:{color:'#F1F5F9'}},
+        y:{grid:{display:false},ticks:{font:{family:'IBM Plex Mono',size:11}}}
+      },
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.x} ms`}}}
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 5. RESOLVER COMPARISON
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const grp = groupBy(RAW,'res');
+  const resolvers = Object.keys(grp);
+  const avgLats   = resolvers.map(r=>+avg(grp[r].map(x=>x.lat)).toFixed(1));
+  const errRates  = resolvers.map(r=>+(grp[r].filter(x=>x.status==='Error').length/grp[r].length*100).toFixed(1));
+
+  mkChart('chart-resolver',{
+    type:'bar',
+    data:{
+      labels:resolvers,
+      datasets:[
+        {label:'Avg Latency (ms)',data:avgLats,backgroundColor:'rgba(0,163,224,.7)',borderRadius:4,yAxisID:'y'},
+        {label:'Error Rate (%)',  data:errRates,backgroundColor:'rgba(220,38,38,.5)',borderRadius:4,yAxisID:'y2'}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      scales:{
+        y:{title:{display:true,text:'ms'},grid:{color:'#F1F5F9'}},
+        y2:{position:'right',title:{display:true,text:'%'},grid:{display:false},max:30}
+      }
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 6. POLAR AREA
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const grp = groupBy(RAW,'type');
+  const labels = Object.keys(grp);
+  const data   = labels.map(k=>grp[k].length);
+
+  mkChart('chart-polar',{
+    type:'polarArea',
+    data:{
+      labels,
+      datasets:[{data,backgroundColor:PALETTE.map(c=>c+'CC'),borderColor:'#fff',borderWidth:1.5}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      scales:{r:{ticks:{font:{size:9}},grid:{color:'#E2E8F0'}}},
+      plugins:{legend:{position:'right',labels:{font:{size:10},padding:8}}}
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 7. STACKED SUCCESS/ERROR
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const grp = groupBy(RAW,'type');
+  const labels = Object.keys(grp).sort();
+  const ok  = labels.map(t=>grp[t].filter(r=>r.status==='Success').length);
+  const err = labels.map(t=>grp[t].filter(r=>r.status==='Error').length);
+
+  mkChart('chart-stacked',{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Success',data:ok, backgroundColor:'rgba(0,135,90,.75)',borderRadius:2},
+        {label:'Error',  data:err,backgroundColor:'rgba(220,38,38,.65)',borderRadius:2}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      scales:{
+        x:{stacked:true,grid:{display:false}},
+        y:{stacked:true,title:{display:true,text:'Queries'},grid:{color:'#F1F5F9'}}
+      }
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 8. RFC BAR
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const grp = groupBy(RAW,'rfc');
+  const labels = Object.keys(grp).sort();
+  const data   = labels.map(k=>grp[k].length);
+
+  mkChart('chart-rfc-bar',{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[{label:'Queries',data,backgroundColor:PALETTE.slice(0,labels.length).map(c=>c+'CC'),borderRadius:6}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      scales:{
+        x:{grid:{display:false}},
+        y:{title:{display:true,text:'Count'},grid:{color:'#F1F5F9'}}
+      },
+      plugins:{legend:{display:false}}
+    }
+  });
+
+  // Progress bars
+  const div = document.getElementById('rfc-progress');
+  const colors = ['#005BAC','#00A3E0','#00875A','#F59E0B','#DC2626','#8B5CF6','#059669','#D97706'];
+  labels.forEach((l,i)=>{
+    const cnt = grp[l].length;
+    const w   = (cnt/total*100).toFixed(0);
+    div.innerHTML += `
+      <div class="progress-row">
+        <div class="progress-label">${l}</div>
+        <div class="progress-track">
+          <div class="progress-fill" style="width:${w}%;background:${colors[i%colors.length]}"></div>
+        </div>
+        <div class="progress-count">${cnt}</div>
+      </div>`;
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 9. IANA TABLE
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const grp = groupBy(RAW,'type');
+  const rows = Object.entries(grp)
+    .map(([t,arr])=>({
+      type:t, id:arr[0].id, rfc:arr[0].rfc,
+      count:arr.length,
+      avgLat:avg(arr.map(r=>r.lat)).toFixed(1),
+      sr:+(arr.filter(r=>r.status==='Success').length/arr.length*100).toFixed(1)
+    }))
+    .sort((a,b)=>a.id-b.id);
+
+  const tbl = document.getElementById('iana-table');
+  tbl.innerHTML = `
+    <thead><tr>
+      <th>Record Type</th><th>IANA ID</th><th>RFC Reference</th>
+      <th>Queries</th><th>Avg Latency</th><th>Success Rate</th>
+    </tr></thead>
+    <tbody>${rows.map(r=>`
+      <tr>
+        <td><strong>${r.type}</strong></td>
+        <td class="mono">${r.id}</td>
+        <td><span class="badge badge-info">${r.rfc}</span></td>
+        <td class="mono">${r.count}</td>
+        <td class="mono">${r.avgLat} ms</td>
+        <td><span class="badge ${r.sr===100?'badge-success':r.sr>=80?'badge-warn':'badge-error'}">${r.sr}%</span></td>
+      </tr>`).join('')}
+    </tbody>`;
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 10. DNSSEC CHART
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const dns = RAW.filter(r=>DNSSEC_TYPES.has(r.type));
+  const grp = groupBy(dns,'type');
+  const labels = Object.keys(grp);
+  const counts  = labels.map(k=>grp[k].length);
+  const latAvgs = labels.map(k=>+avg(grp[k].map(r=>r.lat)).toFixed(1));
+
+  mkChart('chart-dnssec',{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Query Count',   data:counts,  backgroundColor:'rgba(0,91,172,.7)',  yAxisID:'y',  borderRadius:4},
+        {label:'Avg Latency (ms)',data:latAvgs,backgroundColor:'rgba(245,158,11,.6)',yAxisID:'y2', borderRadius:4}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      scales:{
+        y: {title:{display:true,text:'Count'},grid:{color:'#F1F5F9'}},
+        y2:{position:'right',title:{display:true,text:'ms'},grid:{display:false}}
+      }
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 11. CRYPTO OVERHEAD CHART
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const dnssecRows  = RAW.filter(r=>DNSSEC_TYPES.has(r.type));
+  const stdRows     = RAW.filter(r=>!DNSSEC_TYPES.has(r.type));
+  const dnssecAvg   = +avg(dnssecRows.map(r=>r.lat)).toFixed(1);
+  const stdAvg      = +avg(stdRows.map(r=>r.lat)).toFixed(1);
+  const overhead    = +(dnssecAvg-stdAvg).toFixed(1);
+
+  mkChart('chart-crypto',{
+    type:'bar',
+    data:{
+      labels:['Standard Queries','DNSSEC Queries',`Overhead (+${overhead} ms)`],
+      datasets:[{
+        label:'Avg Latency (ms)',
+        data:[stdAvg,dnssecAvg,overhead],
+        backgroundColor:['rgba(0,135,90,.7)','rgba(220,38,38,.7)','rgba(245,158,11,.7)'],
+        borderRadius:6
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      scales:{
+        x:{grid:{display:false}},
+        y:{title:{display:true,text:'ms'},grid:{color:'#F1F5F9'}}
+      },
+      plugins:{legend:{display:false}}
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 12. DNSSEC TABLE
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const dns = RAW.filter(r=>DNSSEC_TYPES.has(r.type));
+  const grp = groupBy(dns,'type');
+  const rows = Object.entries(grp)
+    .map(([t,arr])=>({type:t,id:arr[0].id,rfc:arr[0].rfc,count:arr.length,avgLat:avg(arr.map(r=>r.lat)).toFixed(1)}))
+    .sort((a,b)=>a.id-b.id);
+
+  const tbl = document.getElementById('dnssec-table');
+  tbl.innerHTML = `
+    <thead><tr>
+      <th>Record Type</th><th>IANA ID</th><th>RFC Reference</th><th>Purpose</th><th>Queries</th><th>Avg Latency</th>
+    </tr></thead>
+    <tbody>${rows.map(r=>{
+      const desc = {DNSKEY:'Zone public key',DS:'Delegation signer / trust chain',RRSIG:'Cryptographic signature',NSEC:'Denial of existence',NSEC3:'Hashed denial of existence'};
+      return `<tr>
+        <td><strong>${r.type}</strong></td>
+        <td class="mono">${r.id}</td>
+        <td><span class="badge badge-info">${r.rfc}</span></td>
+        <td style="color:var(--muted);font-size:.82rem">${desc[r.type]||'—'}</td>
+        <td class="mono">${r.count}</td>
+        <td class="mono">${r.avgLat} ms</td>
+      </tr>`;
+    }).join('')}
+    </tbody>`;
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 13. RAW DATA TABLE
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const tbl = document.getElementById('raw-table');
+  const statusBadge = s => s==='Success'
+    ? '<span class="badge badge-success">Success</span>'
+    : '<span class="badge badge-error">Error</span>';
+  const rcodeBadge = r => {
+    const map = {NOERROR:'badge-success',SERVFAIL:'badge-error',NXDOMAIN:'badge-warn',TIMEOUT:'badge-error'};
+    return `<span class="badge ${map[r]||'badge-info'}">${r}</span>`;
+  };
+
+  tbl.innerHTML = `
+    <thead><tr>
+      <th>Timestamp</th><th>Type</th><th>IANA ID</th><th>RFC</th>
+      <th>Domain</th><th>Resolver</th><th>Latency</th><th>RCODE</th><th>Status</th>
+    </tr></thead>
+    <tbody>${RAW.map(r=>`
+      <tr>
+        <td class="mono" style="font-size:.75rem">${r.ts}</td>
+        <td><strong>${r.type}</strong></td>
+        <td class="mono">${r.id}</td>
+        <td><span class="badge badge-info">${r.rfc}</span></td>
+        <td style="font-size:.78rem;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.domain}</td>
+        <td class="mono" style="font-size:.78rem">${r.res}</td>
+        <td class="mono">${r.lat} ms</td>
+        <td>${rcodeBadge(r.rcode)}</td>
+        <td>${statusBadge(r.status)}</td>
+      </tr>`).join('')}
+    </tbody>`;
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════════════
+function showPanel(name, btn) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
